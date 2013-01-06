@@ -38,31 +38,14 @@ endfunction
 " Latexmk {{{
 function! LatexBox_Latexmk(force)
 
-	if empty(v:servername)
-		echoerr "cannot run latexmk in background without a VIM server"
-		return
-	endif
-
 	let basename = LatexBox_GetTexBasename(1)
-
-	if has_key(s:latexmk_running_pids, basename)
-		echomsg "latexmk is already running for `" . fnamemodify(basename, ':t') . "'"
-		return
-	endif
-
-	let callsetpid = s:SIDWrap('LatexmkSetPID')
-	let callback = s:SIDWrap('LatexmkCallback')
 
 	let l:options = '-' . g:LatexBox_output_type . ' -quiet ' . g:LatexBox_latexmk_options
 	if a:force
 		let l:options .= ' -g'
 	endif
-	let l:options .= " -e '$pdflatex =~ s/ / -file-line-error /'"
-	let l:options .= " -e '$latex =~ s/ / -file-line-error /'"
-
-	" callback to set the pid
-	let vimsetpid = g:vim_program . ' --servername ' . v:servername . ' --remote-expr ' .
-				\ shellescape(callsetpid) . '\(\"' . fnameescape(basename) . '\",$$\)'
+	" let l:options .= " -e '$pdflatex =~ s/ / -file-line-error /'"
+	let l:options .= "'-file-line-error'"
 
 	" wrap width in log file
 	let max_print_line = 2000
@@ -76,119 +59,12 @@ function! LatexBox_Latexmk(force)
 
 	" latexmk command
 	let cmd = 'cd ' . shellescape(LatexBox_GetTexRoot()) . ' ; ' . l:env .
-				\ ' latexmk ' . l:options	. ' ' . shellescape(LatexBox_GetMainTexFile())
+				\ ' pdflatex ' . l:options	. ' ' . shellescape(LatexBox_GetMainTexFile())
 
-	" callback after latexmk is finished
-	let vimcmd = g:vim_program . ' --servername ' . v:servername . ' --remote-expr ' . 
-				\ shellescape(callback) . '\(\"' . fnameescape(basename) . '\",$?\)'
-
-	silent execute '! ( ' . vimsetpid . ' ; ( ' . cmd . ' ) ; ' . vimcmd . ' ) >&/dev/null &'
+	execute '! ( ( ' . cmd . ' ) ; ) '
 	if !has("gui_running")
 		redraw!
 	endif
-endfunction
-" }}}
-
-" LatexmkStop {{{
-function! LatexBox_LatexmkStop()
-
-	let basename = LatexBox_GetTexBasename(1)
-
-	if !has_key(s:latexmk_running_pids, basename)
-		echomsg "latexmk is not running for `" . fnamemodify(basename, ':t') . "'"
-		return
-	endif
-
-	call s:kill_latexmk(s:latexmk_running_pids[basename])
-
-	call remove(s:latexmk_running_pids, basename)
-	echomsg "latexmk stopped for `" . fnamemodify(basename, ':t') . "'"
-endfunction
-" }}}
-
-" kill_latexmk {{{
-function! s:kill_latexmk(gpid)
-
-	" This version doesn't work on systems on which pkill is not installed:
-	"!silent execute '! pkill -g ' . pid
-
-	" This version is more portable, but still doesn't work on Mac OS X:
-	"!silent execute '! kill `ps -o pid= -g ' . pid . '`'
-
-	" Since 'ps' behaves differently on different platforms, we must use brute force:
-	" - list all processes in a temporary file
-	" - match by process group ID
-	" - kill matches
-	let pids = []
-	let tmpfile = tempname()
-	silent execute '!ps x -o pgid,pid > ' . tmpfile
-	for line in readfile(tmpfile)
-		let pid = matchstr(line, '^\s*' . a:gpid . '\s\+\zs\d\+\ze')
-		if !empty(pid)
-			call add(pids, pid)
-		endif
-	endfor
-	call delete(tmpfile)
-	if !empty(pids)
-		silent execute '! kill ' . join(pids)
-	endif
-endfunction
-" }}}
-
-" kill_all_latexmk {{{
-function! s:kill_all_latexmk()
-	for gpid in values(s:latexmk_running_pids)
-		call s:kill_latexmk(gpid)
-	endfor
-	let s:latexmk_running_pids = {}
-endfunction
-" }}}
-
-" LatexmkClean {{{
-function! LatexBox_LatexmkClean(cleanall)
-
-	if a:cleanall
-		let l:options = '-C'
-	else
-		let l:options = '-c'
-	endif
-
-	silent execute '! cd ' . shellescape(LatexBox_GetTexRoot()) . ' ; latexmk ' . l:options
-				\	. ' ' . shellescape(LatexBox_GetMainTexFile()) . ' >&/dev/null'
-	if !has("gui_running")
-		redraw!
-	endif
-
-	echomsg "latexmk clean finished"
-
-endfunction
-" }}}
-
-" LatexmkStatus {{{
-function! LatexBox_LatexmkStatus(detailed)
-
-	if a:detailed
-		if empty(s:latexmk_running_pids)
-			echo "latexmk is not running"
-		else
-			let plist = ""
-			for [basename, pid] in items(s:latexmk_running_pids)
-				if !empty(plist)
-					let plist .= '; '
-				endif
-				let plist .= fnamemodify(basename, ':t') . ':' . pid
-			endfor
-			echo "latexmk is running (" . plist . ")"
-		endif
-	else
-		let basename = LatexBox_GetTexBasename(1)
-		if has_key(s:latexmk_running_pids, basename)
-			echo "latexmk is running"
-		else
-			echo "latexmk is not running"
-		endif
-	endif
-
 endfunction
 " }}}
 
@@ -211,12 +87,119 @@ endfunction
 
 " Commands {{{
 command! -buffer -bang	Latexmk				call LatexBox_Latexmk(<q-bang> == "!")
-command! -buffer -bang	LatexmkClean		call LatexBox_LatexmkClean(<q-bang> == "!")
-command! -buffer -bang	LatexmkStatus		call LatexBox_LatexmkStatus(<q-bang> == "!")
-command! -buffer 		LatexmkStop			call LatexBox_LatexmkStop()
 command! -buffer      	LatexErrors			call LatexBox_LatexErrors(1)
+command! -buffer      	LatexErrors2			call LatexBox_LatexErrors2(1)
 " }}}
 
-autocmd VimLeavePre * call <SID>kill_all_latexmk()
+function! LatexBox_LatexErrors2(jump, ...)
+	call s:SetLatexEfm()
+	let a = Tex_CompileLatex()
+	let errlist = Tex_GetErrorList()
+	cclose
+	cwindow
+endfunction
 
+
+
+
+" Tex_GetErrorList: returns vim's clist {{{
+" Description: returns the contents of the error list available via the :clist
+"              command.
+function! Tex_GetErrorList()
+	let _a = @a
+	redir @a | silent! clist | redir END
+	let errlist = @a
+	let @a = _a
+
+	if errlist =~ 'E42: '
+		let errlist = ''
+	endif
+	echo errlist
+	return errlist
+endfunction " }}}
+
+
+" Tex_CompileLatex: compiles the present file. {{{
+" Description:
+function! Tex_CompileLatex()
+	if &ft != 'tex'
+		echo "calling Tex_RunLaTeX from a non-tex file"
+		return
+	end
+
+	" close any preview windows left open.
+	pclose!
+
+	let s:origdir = fnameescape(getcwd())
+
+	let mainfname = 'report.tex'
+
+	let escChars = '{}\'
+	let current_compiler = 'pdflatex'
+	let &l:makeprg =  '/home/jtrindade/vim/bundle/vimlatex/vimlatex ' . current_compiler . ' ' . '"\nonstopmode \input{$*}"'
+	exec 'make! '.mainfname
+	redraw!
+
+	exe 'cd '.s:origdir
+endfunction " }}}
+
+function! <SID>SetLatexEfm()
+
+	let g:Tex_ShowallLines = 0
+	let pm = ( g:Tex_ShowallLines == 1 ? '+' : '-' )
+
+	set efm=
+	" remove default error formats that cause issues with revtex, where they
+	" match version messages
+	" Reference: http://bugs.debian.org/582100
+	set efm-=%f:%l:%m
+	set efm-=%f:%l:%c:%m
+
+	" if !g:Tex_ShowallLines
+	" 	call s:IgnoreWarnings()
+	" endif
+
+	set efm+=%E!\ LaTeX\ %trror:\ %m
+	set efm+=%E!\ %m
+	set efm+=%E%f:%l:\ %m
+
+	set efm+=%+WLaTeX\ %.%#Warning:\ %.%#line\ %l%.%#
+	set efm+=%+W%.%#\ at\ lines\ %l--%*\\d
+	set efm+=%+WLaTeX\ %.%#Warning:\ %m
+
+	exec 'set efm+=%'.pm.'Cl.%l\ %m'
+	exec 'set efm+=%'.pm.'Cl.%l\ '
+	exec 'set efm+=%'.pm.'C\ \ %m'
+	exec 'set efm+=%'.pm.'C%.%#-%.%#'
+	exec 'set efm+=%'.pm.'C%.%#[]%.%#'
+	exec 'set efm+=%'.pm.'C[]%.%#'
+	exec 'set efm+=%'.pm.'C%.%#%[{}\\]%.%#'
+	exec 'set efm+=%'.pm.'C<%.%#>%m'
+	exec 'set efm+=%'.pm.'C\ \ %m'
+	exec 'set efm+=%'.pm.'GSee\ the\ LaTeX%m'
+	exec 'set efm+=%'.pm.'GType\ \ H\ <return>%m'
+	exec 'set efm+=%'.pm.'G\ ...%.%#'
+	exec 'set efm+=%'.pm.'G%.%#\ (C)\ %.%#'
+	exec 'set efm+=%'.pm.'G(see\ the\ transcript%.%#)'
+	exec 'set efm+=%'.pm.'G\\s%#'
+	exec 'set efm+=%'.pm.'O(%*[^()])%r'
+	exec 'set efm+=%'.pm.'P(%f%r'
+	exec 'set efm+=%'.pm.'P\ %\\=(%f%r'
+	exec 'set efm+=%'.pm.'P%*[^()](%f%r'
+	exec 'set efm+=%'.pm.'P(%f%*[^()]'
+	exec 'set efm+=%'.pm.'P[%\\d%[^()]%#(%f%r'
+	" if g:Tex_IgnoreUnmatched && !g:Tex_ShowallLines
+	" 	set efm+=%-P%*[^()]
+	" endif
+	exec 'set efm+=%'.pm.'Q)%r'
+	exec 'set efm+=%'.pm.'Q%*[^()])%r'
+	exec 'set efm+=%'.pm.'Q[%\\d%*[^()])%r'
+	" if g:Tex_IgnoreUnmatched && !g:Tex_ShowallLines
+	" 	set efm+=%-Q%*[^()]
+	" endif
+	" if g:Tex_IgnoreUnmatched && !g:Tex_ShowallLines
+	" 	set efm+=%-G%.%#
+	" endif
+
+endfunction 
 " vim:fdm=marker:ff=unix:noet:ts=4:sw=4
