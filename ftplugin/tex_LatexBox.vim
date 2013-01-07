@@ -21,6 +21,8 @@ if !exists('s:loaded')
 	execute 'source ' . s:FNameEscape(prefix . 'complete.vim')
 	execute 'source ' . s:FNameEscape(prefix . 'motion.vim')
 	execute 'source ' . s:FNameEscape(prefix . 'latexmk.vim')
+	execute 'source ' . s:FNameEscape(prefix . 'folding.vim')
+	execute 'source ' . s:FNameEscape(prefix . 'SyntaxFolds.vim')
 
 	let s:loaded = 1
 
