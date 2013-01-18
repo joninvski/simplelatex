@@ -7,6 +7,7 @@
 "  Description: functions to interact with Syntaxfolds.vim
 "=============================================================================
 
+" TODO - Not being called automatically
 nnoremap <unique> <Plug>Tex_RefreshFolds :call MakeTexFolds(1)<cr>
 
 " Tex_SetFoldOptions: sets maps for every buffer {{{

@@ -136,6 +136,7 @@ function! Tex_CompileLatex()
 
 	let escChars = '{}\'
 	let current_compiler = 'pdflatex'
+	" TODO - Put the vimlatex binary in a variable (why not include it the plugin??)
 	let &l:makeprg =  '/home/jtrindade/vim/bundle/vimlatex/vimlatex ' . current_compiler . ' ' . '"\nonstopmode \input{$*}"'
 	exec 'make! '.mainfname
 	redraw!
